@@ -56,6 +56,7 @@ contract EventCreator is ReentrancyGuard {
     }
 
     //////////// State variables //////////////
+    address public WhoIsTheMasterCreatorOfThisContractHeMustBeHandsome;
     uint256 public eventId;
     uint256 public eventBalance;
 
@@ -86,18 +87,21 @@ contract EventCreator is ReentrancyGuard {
     event EventOwnerWithdraw(uint256 eventId, uint256 balance);
 
     //////////// Errors //////////////
-    error EventCreator__choosedAInvalidOption();
+    error EventCreator__NotEventOwner();
+    error EventCreator__NotEnoughEthValue();
+    error EventCreator__NotEnoughTicketsAvailable();
+    error EventCreator__NotEnoughTicketsSold();
+    error EventCreator__EventIsNotOpen();
     error EventCreator__EventHasAlreadyEnded();
     error EventCreator__EventDoesNotExist();
-    error EventCreator__NotEventOwner();
+    error EventCreator__ChoosedAInvalidOption();
     error EventCreator__BeforeEventDeadline();
     error EventCreator__MustBuyAtLeastOneTicket();
-    error EventCreator__NotEnoughTicketsAvailable();
     error EventCreator__HaveInsufficientFunds();
-    error EventCreator__NotEnoughEthValue();
-    error EventCreator__EventIsNotOpen();
-    error EventCreator__NotEnoughTicketsSold();
-
+    error EventCreator__AttendeeOrEventNameDoesNotExist(
+        string eventName,
+        address attendeeAddress
+    );
     //////////// Modifiers //////////////
     modifier onlyEventOwner(uint256 id) {
         if (msg.sender != events[id].owner)
@@ -105,10 +109,13 @@ contract EventCreator is ReentrancyGuard {
         _;
     }
 
-    //TODO: Add chainspecific varibles
-    //TODO: Create a modifier that gives each owner the ability to pause, resume and cancel their event
-
-    constructor() {}
+    constructor() {
+        // to be honest there is no reason to have this constructor in this contract
+        // but normaly i would implemnt a chainlink price feed to get the price of the ticket in SEK
+        // and than it would make sense to have this constructor
+        // This setting of the creator addres is just for fun
+        WhoIsTheMasterCreatorOfThisContractHeMustBeHandsome = msg.sender;
+    }
 
     //////////// External functions //////////////
     /*
@@ -147,6 +154,16 @@ contract EventCreator is ReentrancyGuard {
     }
 
     //TODO: Consider to add Chainlink priceFeed to get the price of the ticket in SEK
+    //
+    /**
+     * @dev Buy a ticket form an event
+     * @param id - The id of the event
+     * @param ticketCount - The number of tickets to buy
+     * @notice The function reverts if the event is not open, the deadline has passed, the ticket count is less than or equal to 0, there are not enough tickets available, the sender has insufficient funds, or the value sent is less than the total cost
+     * @notice The function emits an AttendeeRegistered event if the attendee is successfully registered
+     * @notice The function refunds any excess payment to the sender(Payer)
+     *
+     * */
     function buyTicket(
         uint256 id,
         uint16 ticketCount
@@ -181,6 +198,13 @@ contract EventCreator is ReentrancyGuard {
         );
     }
 
+    /**
+     * @dev Withdraw the balance of an event
+     * @param id - The id of the event
+     *@notice have the onlyEventOwner modifier
+     * @notice The function reverts if the sender is not the owner of the event, the deadline has not passed, or the event has not ended
+     * @notice The function emits an EventOwnerWithdraw event if the owner successfully withdraws the balance
+     * */
     function withdraw(uint256 id) external nonReentrant onlyEventOwner(id) {
         EventInfo storage eventInfo = events[id];
 
@@ -195,6 +219,13 @@ contract EventCreator is ReentrancyGuard {
         emit EventOwnerWithdraw(id, balance);
     }
 
+    /**
+     * @dev Withdraw half of the balance of an event
+     * @param id - The id of the event
+     *@notice have the onlyEventOwner modifier
+     * @notice The function reverts if the sender is not the owner of the event, the deadline has not passed, or the event has not ended
+     * @notice The function emits an EventOwnerWithdraw event if the owner successfully withdraws the balance
+     * */
     function halfTimeWithdraw(
         uint256 id
     ) external nonReentrant onlyEventOwner(id) {
@@ -214,6 +245,11 @@ contract EventCreator is ReentrancyGuard {
         emit EventOwnerWithdraw(id, balance);
     }
 
+    /**
+     * @dev Pause an event
+     * @param id - The id of the event
+     *@notice have the onlyEventOwner modifier
+     * */
     function pauseEvent(uint256 id) external onlyEventOwner(id) {
         EventInfo storage eventInfo = events[id];
         eventInfo.status = EventStatus.PAUSED;
@@ -221,6 +257,11 @@ contract EventCreator is ReentrancyGuard {
         emit eventStatus(id, eventInfo.status);
     }
 
+    /**
+     * @dev Resume a paused event
+     * @param id - The id of the event
+     *@notice have the onlyEventOwner modifier
+     * */
     function resumeEvent(uint256 id) external onlyEventOwner(id) {
         EventInfo storage eventInfo = events[id];
         eventInfo.status = EventStatus.OPEN;
@@ -228,6 +269,11 @@ contract EventCreator is ReentrancyGuard {
         emit eventStatus(id, eventInfo.status);
     }
 
+    /**
+     * @dev Cancel an event
+     * @param id - The id of the event
+     *@notice have the onlyEventOwner modifier
+     * */
     function cancelEvent(uint256 id) external onlyEventOwner(id) {
         EventInfo storage eventInfo = events[id];
         eventInfo.status = EventStatus.ENDED;
@@ -247,6 +293,14 @@ contract EventCreator is ReentrancyGuard {
         string memory eventName,
         address addressOfAttendee
     ) external view returns (uint16) {
+        if (
+            eventAttendees[eventName][addressOfAttendee].attendeeAddress ==
+            address(0)
+        )
+            revert EventCreator__AttendeeOrEventNameDoesNotExist(
+                eventName,
+                addressOfAttendee
+            );
         return eventAttendees[eventName][addressOfAttendee].ticketCount;
     }
 
@@ -256,13 +310,19 @@ contract EventCreator is ReentrancyGuard {
 
     /////////////// Internal functions ///////////////
 
+    /**
+     * @dev Refund everyone of an event
+     * @dev internal function
+     * */
     function _refundEveryoneOfEvent(uint256 id) internal {
         EventInfo storage eventInfo = events[id];
         for (uint256 i = 0; i < eventInfo.attendees.length; ++i) {
             Attendee storage attendee = eventInfo.attendees[i];
-            payable(attendee.attendeeAddress).transfer(
-                attendee.ticketCount * eventInfo.eventDescription.ticketPrice
-            );
+            uint256 ToRefund = attendee.ticketCount *
+                eventInfo.eventDescription.ticketPrice;
+            payable(attendee.attendeeAddress).transfer(ToRefund);
+
+            eventBalances[id] -= ToRefund;
 
             emit AttendeeRefunded(
                 eventInfo.eventDescription.eventName,
@@ -270,8 +330,13 @@ contract EventCreator is ReentrancyGuard {
                 attendee.ticketCount
             );
         }
+        assert(eventBalances[id] == 0);
     }
 
+    /**
+     * @dev Check the permissions of the sender, the event, and the ticket count
+     * @dev internal function
+     * */
     function _checkPermissions(
         uint256 ticketCount,
         uint256 id
@@ -292,8 +357,8 @@ contract EventCreator is ReentrancyGuard {
         uint256 totalCost = eventInfo.eventDescription.ticketPrice *
             ticketCount;
 
-        if (msg.sender.balance < totalCost)
-            revert EventCreator__HaveInsufficientFunds();
+        // if (msg.sender.balance < totalCost)
+        //     revert EventCreator__HaveInsufficientFunds();
 
         if (msg.value < totalCost) revert EventCreator__NotEnoughEthValue();
         return (eventInfo, totalCost);
@@ -302,6 +367,6 @@ contract EventCreator is ReentrancyGuard {
     //////////// Receive and fallback function //////////////
 
     fallback() external {
-        revert EventCreator__choosedAInvalidOption();
+        revert EventCreator__ChoosedAInvalidOption();
     }
 }

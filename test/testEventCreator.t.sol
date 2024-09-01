@@ -13,6 +13,7 @@ contract TestEventCreator is Test {
     address public charlie = vm.addr(0x3);
     address public david = vm.addr(0x4);
     address public eve = vm.addr(0x5);
+    address public poorFrank = vm.addr(0x6);
     address public eventOwner = vm.addr(0x10);
 
     uint256 public constant INITIAL_BALANCE = 100 ether;
@@ -28,6 +29,14 @@ contract TestEventCreator is Test {
         vm.deal(eve, INITIAL_BALANCE);
 
         eventCreator = new EventCreator();
+        createEventStruct(
+            "Rock Concert",
+            "Rock concert with the best rock bands",
+            "Rock Arena",
+            TICKET_PRICE,
+            20,
+            eventOwner
+        );
     }
 
     //////// Test for successful execution ////////
@@ -41,7 +50,7 @@ contract TestEventCreator is Test {
             eventOwner
         );
 
-        EventCreator.EventInfo memory newEvent = eventCreator.getEvent(1);
+        EventCreator.EventInfo memory newEvent = eventCreator.getEvent(2);
         EventCreator.EventDescription memory descr = newEvent.eventDescription;
         EventCreator.Attendee[] memory attendees = newEvent.attendees;
 
@@ -59,15 +68,6 @@ contract TestEventCreator is Test {
     }
 
     function test_buyTicket() public {
-        createEventStruct(
-            "Rock Concert",
-            "Rock concert with the best rock bands",
-            "Rock Arena",
-            TICKET_PRICE,
-            300,
-            eventOwner
-        );
-
         vm.prank(alice);
         eventCreator.buyTicket{value: 200}(1, 2);
 
@@ -84,14 +84,6 @@ contract TestEventCreator is Test {
     }
 
     function test_MultipleAtendees() public {
-        createEventStruct(
-            "Rock Concert",
-            "Rock concert with the best rock bands",
-            "Rock Arena",
-            TICKET_PRICE,
-            20,
-            eventOwner
-        );
         // 4 attendees buy 2 tickets each
         createMultiplePurchase(1, 2);
 
@@ -105,14 +97,6 @@ contract TestEventCreator is Test {
     }
 
     function test_Withdraw() public {
-        createEventStruct(
-            "Rock Concert",
-            "Rock concert with the best rock bands",
-            "Rock Arena",
-            TICKET_PRICE,
-            20,
-            eventOwner
-        );
         createMultiplePurchase(1, 2);
 
         vm.warp(6 weeks);
@@ -126,14 +110,6 @@ contract TestEventCreator is Test {
     }
 
     function test_HalfTimeWithdraw() public {
-        createEventStruct(
-            "Rock Concert",
-            "Rock concert with the best rock bands",
-            "Rock Arena",
-            TICKET_PRICE,
-            20,
-            eventOwner
-        );
         createMultiplePurchase(1, 2);
 
         vm.warp(3 weeks);
@@ -146,39 +122,225 @@ contract TestEventCreator is Test {
         assert(newEvent.status == EventCreator.EventStatus.OPEN);
     }
 
+    function test_RefundUserWhenEventCanceled() public {
+        createMultiplePurchase(1, 2);
+
+        vm.prank(eventOwner);
+        eventCreator.cancelEvent(1);
+
+        EventCreator.EventInfo memory newEvent = eventCreator.getEvent(1);
+        EventCreator.Attendee[] memory attendees = newEvent.attendees;
+
+        // assertEq(attendees.length, 0);
+        assertEq(eventCreator.getEventBalance(1), 0);
+        // bob, alice, charlie
+        assertEq(attendees[0].attendeeAddress.balance, INITIAL_BALANCE);
+        assertEq(attendees[1].attendeeAddress.balance, INITIAL_BALANCE);
+        assertEq(attendees[2].attendeeAddress.balance, INITIAL_BALANCE);
+        assert(newEvent.status == EventCreator.EventStatus.ENDED);
+    }
+
+    function test_RefundExeciveValueInput() public {
+        vm.prank(alice);
+        eventCreator.buyTicket{value: 600}(1, 2);
+        assertEq(eventCreator.getEventBalance(1), 200);
+        assertEq(alice.balance, INITIAL_BALANCE - 200);
+    }
+
     /////// Test for revert ///////
     function test_RevertWhenNoMoreTicketIsAvailable() public {
         createEventStruct(
-            "Rock Concert",
+            "New Rock Concert",
             "Rock concert with the best rock bands",
             "Rock Arena",
             TICKET_PRICE,
             2,
             eventOwner
         );
+
         vm.prank(alice);
-        eventCreator.buyTicket{value: 200}(1, 2);
+        eventCreator.buyTicket{value: 200}(2, 2);
 
         vm.expectRevert(
             EventCreator.EventCreator__NotEnoughTicketsAvailable.selector
         );
         vm.prank(bob);
+        eventCreator.buyTicket{value: 200}(2, 2);
+    }
+
+    function test_RevertWhenTheValueIsNotEnough() public {
+        vm.expectRevert(EventCreator.EventCreator__NotEnoughEthValue.selector);
+        vm.prank(alice);
+        eventCreator.buyTicket{value: 50}(1, 2);
+    }
+
+    function test_RevertWhenZeroTicketsArePurchased() public {
+        vm.expectRevert(
+            EventCreator.EventCreator__MustBuyAtLeastOneTicket.selector
+        );
+        vm.prank(alice);
+        eventCreator.buyTicket{value: 100}(1, 0);
+    }
+
+    function test_RevertWhenTheBuyerHaveNotEnoughBalance() public {
+        vm.expectRevert();
+        vm.prank(poorFrank);
         eventCreator.buyTicket{value: 200}(1, 2);
     }
 
-    /////// Test for States ///////
-    function test_StateIsOpen() public {
+    function test_RevertWhenDeadlineHasPassed() public {
+        vm.warp(5 weeks);
+        vm.expectRevert(
+            EventCreator.EventCreator__EventHasAlreadyEnded.selector
+        );
+        vm.prank(alice);
+        eventCreator.buyTicket{value: 200}(1, 2);
+    }
+
+    function test_RevertWhenDeadlineHasNotPassedInWitdraw() public {
+        createMultiplePurchase(1, 2);
+
+        vm.warp(3 weeks);
+        vm.expectRevert(
+            EventCreator.EventCreator__BeforeEventDeadline.selector
+        );
+        vm.prank(eventOwner);
+        eventCreator.withdraw(1);
+    }
+
+    function test_ReventWhenEventIsPaused() public {
+        vm.prank(eventOwner);
+        eventCreator.pauseEvent(1);
+
+        vm.expectRevert(EventCreator.EventCreator__EventIsNotOpen.selector);
+        vm.prank(alice);
+        eventCreator.buyTicket{value: 200}(1, 2);
+    }
+
+    function test_ReventWhenNotEventOwner() public {
+        vm.expectRevert(EventCreator.EventCreator__NotEventOwner.selector);
+        vm.prank(alice);
+        eventCreator.pauseEvent(1);
+    }
+
+    function test_RevertgetAttendeeOfAnEventTicketCountWhenWrongName() public {
+        createMultiplePurchase(1, 2);
+
+        vm.expectRevert();
+        eventCreator.getAttendeeOfAnEventTicketCount("Rock", bob);
+    }
+
+    function test_RevertFallBack() public {
+        vm.expectRevert(
+            EventCreator.EventCreator__ChoosedAInvalidOption.selector
+        );
+        vm.prank(alice);
+        (bool failed, ) = address(eventCreator).call{value: 1 ether}("");
+        assertEq(address(eventCreator).balance, 0);
+        assertFalse(failed);
+    }
+
+    function test_RevertWhenCreateEventMoreThanMaxTickets() public {
+        vm.expectRevert();
         createEventStruct(
             "Rock Concert",
             "Rock concert with the best rock bands",
             "Rock Arena",
             TICKET_PRICE,
-            20,
+            65400,
             eventOwner
         );
+    }
 
+    function test_RevertWhenDeadlineIsinThePast() public {
+        vm.expectRevert();
+        EventCreator.EventDescription memory eventDescription = EventCreator
+            .EventDescription({
+                eventName: "Revert Event",
+                eventDescription: "Revert Event",
+                eventLocation: "Revert Event",
+                ticketPrice: 100,
+                totalTickets: 100
+            });
+        vm.prank(alice);
+        vm.warp(5 weeks);
+        eventCreator.createEvent(eventDescription, 2, MIMUM_TICKETS);
+    }
+
+    function test_RevertWhenNotEnoughTicketsSoldOnWithdrawHalftime() public {
+        vm.prank(alice);
+        eventCreator.buyTicket{value: 200}(1, 1);
+        vm.warp(3 weeks);
+        vm.expectRevert(
+            EventCreator.EventCreator__NotEnoughTicketsSold.selector
+        );
+        vm.prank(eventOwner);
+        eventCreator.halfTimeWithdraw(1);
+    }
+
+    function test_RevertHalftimeWithdrawWhenHalfDeadlineHasNotPassed() public {
+        vm.expectRevert(
+            EventCreator.EventCreator__BeforeEventDeadline.selector
+        );
+        vm.prank(eventOwner);
+        eventCreator.halfTimeWithdraw(1);
+    }
+
+    /////// Test for States ///////
+    function test_StateIsOpen() public view {
         EventCreator.EventInfo memory newEvent = eventCreator.getEvent(1);
         assert(newEvent.status == EventCreator.EventStatus.OPEN);
+    }
+
+    function test_StateIsPaused() public {
+        vm.prank(eventOwner);
+        eventCreator.pauseEvent(1);
+
+        EventCreator.EventInfo memory newEvent = eventCreator.getEvent(1);
+        assert(newEvent.status == EventCreator.EventStatus.PAUSED);
+    }
+
+    function test_StateIsEnded() public {
+        createMultiplePurchase(1, 2);
+
+        vm.warp(6 weeks);
+        vm.prank(eventOwner);
+        eventCreator.withdraw(1);
+
+        EventCreator.EventInfo memory newEvent = eventCreator.getEvent(1);
+        assert(newEvent.status == EventCreator.EventStatus.ENDED);
+    }
+
+    function test_StateIsEndedWhenCancelEventIsCalled() public {
+        vm.prank(eventOwner);
+        eventCreator.cancelEvent(1);
+
+        EventCreator.EventInfo memory newEvent = eventCreator.getEvent(1);
+        assert(newEvent.status == EventCreator.EventStatus.ENDED);
+    }
+
+    function test_StateIsOpenAfterResume() public {
+        vm.prank(eventOwner);
+        eventCreator.pauseEvent(1);
+
+        EventCreator.EventInfo memory newEvent = eventCreator.getEvent(1);
+        assert(newEvent.status == EventCreator.EventStatus.PAUSED);
+
+        vm.prank(eventOwner);
+        eventCreator.resumeEvent(1);
+
+        newEvent = eventCreator.getEvent(1);
+        assert(newEvent.status == EventCreator.EventStatus.OPEN);
+    }
+
+    function test_getAttendeeOfAnEventTicketCount() public {
+        createMultiplePurchase(1, 2);
+
+        uint16 ticketCount = eventCreator.getAttendeeOfAnEventTicketCount(
+            "Rock Concert",
+            bob
+        );
+        assertEq(ticketCount, 2);
     }
 
     /////////////// Helper functions ///////////////
