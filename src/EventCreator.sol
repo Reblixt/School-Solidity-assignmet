@@ -73,6 +73,17 @@ contract EventCreator is ReentrancyGuard {
         address eventOwner
     );
     event eventStatus(uint256 eventId, EventStatus status);
+    event AttendeeRegistered(
+        string eventName,
+        address attendeeAddress,
+        uint16 ticketCount
+    );
+    event AttendeeRefunded(
+        string eventName,
+        address attendeeAddress,
+        uint16 ticketCount
+    );
+    event EventOwnerWithdraw(uint256 eventId, uint256 balance);
 
     //////////// Errors //////////////
     error EventCreator__choosedAInvalidOption();
@@ -151,10 +162,10 @@ contract EventCreator is ReentrancyGuard {
         ][msg.sender];
         if (attendee.attendeeAddress == address(0)) {
             attendee.attendeeAddress = msg.sender;
+            attendee.ticketCount = ticketCount;
             eventInfo.attendees.push(attendee);
         }
         ++eventInfo.attendeeCount;
-        attendee.ticketCount += ticketCount;
         eventInfo.ticketsSold += ticketCount;
         eventBalances[id] += totalCost;
 
@@ -162,6 +173,12 @@ contract EventCreator is ReentrancyGuard {
         if (msg.value > totalCost) {
             payable(msg.sender).transfer(msg.value - totalCost);
         }
+
+        emit AttendeeRegistered(
+            eventInfo.eventDescription.eventName,
+            msg.sender,
+            ticketCount
+        );
     }
 
     function withdraw(uint256 id) external nonReentrant onlyEventOwner(id) {
@@ -172,7 +189,10 @@ contract EventCreator is ReentrancyGuard {
 
         uint256 balance = eventBalances[id];
         eventBalances[id] = 0;
+        eventInfo.status = EventStatus.ENDED;
         payable(msg.sender).transfer(balance);
+
+        emit EventOwnerWithdraw(id, balance);
     }
 
     function halfTimeWithdraw(
@@ -190,6 +210,8 @@ contract EventCreator is ReentrancyGuard {
         uint256 balance = eventBalances[id];
         eventBalances[id] = 0;
         payable(msg.sender).transfer(balance);
+
+        emit EventOwnerWithdraw(id, balance);
     }
 
     function pauseEvent(uint256 id) external onlyEventOwner(id) {
@@ -240,6 +262,12 @@ contract EventCreator is ReentrancyGuard {
             Attendee storage attendee = eventInfo.attendees[i];
             payable(attendee.attendeeAddress).transfer(
                 attendee.ticketCount * eventInfo.eventDescription.ticketPrice
+            );
+
+            emit AttendeeRefunded(
+                eventInfo.eventDescription.eventName,
+                attendee.attendeeAddress,
+                attendee.ticketCount
             );
         }
     }
