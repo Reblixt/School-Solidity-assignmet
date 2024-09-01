@@ -20,4 +20,4 @@ The `EventCreator` contract is a Solidity contract that allows users to create, 
 - [x] Have a falback function
 - [x] Identify and implement atleast three gasoptimzing solution with an explaination.
 - [ ] Distrubute and verify the contract on etherscan. And provide a link 
-- [ ] Atleast test coverage of 90%
+- [x] Atleast test coverage of 90%
