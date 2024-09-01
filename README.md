@@ -15,9 +15,9 @@ The `EventCreator` contract is a Solidity contract that allows users to create, 
 5. **Fallback Function**: The contract includes a fallback function that reverts any transactions that don't match the available functions, preventing Ether from being sent to the contract without a function call.
 
 ### Requirment for VG:
-[x] A constructor
-[x] Atleast: 1 custom error, one require, one assert, one revert, event, and modifier
-[x] Have a falback function
-[x] Identify and implement atleast three gasoptimzing solution with an explaination.
-[ ] Distrubute and verify the contract on etherscan. And provide a link 
-[ ] Atleast test coverage of 90%
+- [x] A constructor
+- [x] Atleast: 1 custom error, one require, one assert, one revert, event, and modifier
+- [x] Have a falback function
+- [x] Identify and implement atleast three gasoptimzing solution with an explaination.
+- [ ] Distrubute and verify the contract on etherscan. And provide a link 
+- [ ] Atleast test coverage of 90%
