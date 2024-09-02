@@ -56,7 +56,7 @@ contract EventCreator is ReentrancyGuard {
     }
 
     //////////// State variables //////////////
-    address public WhoIsTheMasterCreatorOfThisContractHeMustBeHandsome;
+    address public contractOwner;
     uint256 public eventId;
     uint256 public eventBalance;
 
@@ -110,11 +110,7 @@ contract EventCreator is ReentrancyGuard {
     }
 
     constructor() {
-        // to be honest there is no reason to have this constructor in this contract
-        // but normaly i would implemnt a chainlink price feed to get the price of the ticket in SEK
-        // and than it would make sense to have this constructor
-        // This setting of the creator addres is just for fun
-        WhoIsTheMasterCreatorOfThisContractHeMustBeHandsome = msg.sender;
+        contractOwner = msg.sender;
     }
 
     //////////// External functions //////////////
@@ -153,8 +149,6 @@ contract EventCreator is ReentrancyGuard {
         );
     }
 
-    //TODO: Consider to add Chainlink priceFeed to get the price of the ticket in SEK
-    //
     /**
      * @dev Buy a ticket form an event
      * @param id - The id of the event
@@ -173,7 +167,6 @@ contract EventCreator is ReentrancyGuard {
             id
         );
         // Register the attendee
-        //TODO: Check if this sturct need to be refactored
         Attendee storage attendee = eventAttendees[
             eventInfo.eventDescription.eventName
         ][msg.sender];
@@ -201,7 +194,7 @@ contract EventCreator is ReentrancyGuard {
     /**
      * @dev Withdraw the balance of an event
      * @param id - The id of the event
-     *@notice have the onlyEventOwner modifier
+     * @notice have the onlyEventOwner modifier
      * @notice The function reverts if the sender is not the owner of the event, the deadline has not passed, or the event has not ended
      * @notice The function emits an EventOwnerWithdraw event if the owner successfully withdraws the balance
      * */
@@ -222,7 +215,7 @@ contract EventCreator is ReentrancyGuard {
     /**
      * @dev Withdraw half of the balance of an event
      * @param id - The id of the event
-     *@notice have the onlyEventOwner modifier
+     * @notice have the onlyEventOwner modifier
      * @notice The function reverts if the sender is not the owner of the event, the deadline has not passed, or the event has not ended
      * @notice The function emits an EventOwnerWithdraw event if the owner successfully withdraws the balance
      * */
@@ -248,7 +241,7 @@ contract EventCreator is ReentrancyGuard {
     /**
      * @dev Pause an event
      * @param id - The id of the event
-     *@notice have the onlyEventOwner modifier
+     * @notice have the onlyEventOwner modifier
      * */
     function pauseEvent(uint256 id) external onlyEventOwner(id) {
         EventInfo storage eventInfo = events[id];
@@ -260,7 +253,7 @@ contract EventCreator is ReentrancyGuard {
     /**
      * @dev Resume a paused event
      * @param id - The id of the event
-     *@notice have the onlyEventOwner modifier
+     * @notice have the onlyEventOwner modifier
      * */
     function resumeEvent(uint256 id) external onlyEventOwner(id) {
         EventInfo storage eventInfo = events[id];
@@ -272,7 +265,7 @@ contract EventCreator is ReentrancyGuard {
     /**
      * @dev Cancel an event
      * @param id - The id of the event
-     *@notice have the onlyEventOwner modifier
+     * @notice have the onlyEventOwner modifier
      * */
     function cancelEvent(uint256 id) external onlyEventOwner(id) {
         EventInfo storage eventInfo = events[id];
