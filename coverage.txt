@@ -1,0 +1,5 @@
+Uncovered for src/EventCreator.sol:
+- Branch (branch: 9, path: 0) (location: source ID 26, line 326, chars 10706-10736, hits: 0)
+- Function "" (location: source ID 26, line 362, chars 11921-12002, hits: 0)
+- Line (location: source ID 26, line 363, chars 11951-11995, hits: 0)
+- Statement (location: source ID 26, line 363, chars 11951-11995, hits: 0)

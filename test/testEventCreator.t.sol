@@ -1,5 +1,12 @@
 // SPDX-License-Identifier: MIT
 
+// This test suite i have devided into 3 parts:
+// 1. Test for successful execution
+// 2. Test for revert
+// 3. Test for states
+//
+// And at the butten there is pair of helper functions that are used in the test functions
+
 pragma solidity ^0.8.26;
 
 import {Test, console2} from "forge-std/Test.sol";
@@ -8,6 +15,7 @@ import {EventCreator} from "src/EventCreator.sol";
 contract TestEventCreator is Test {
     EventCreator eventCreator;
 
+    // Fake addresses
     address public alice = vm.addr(0x1);
     address public bob = vm.addr(0x2);
     address public charlie = vm.addr(0x3);
@@ -16,10 +24,12 @@ contract TestEventCreator is Test {
     address public poorFrank = vm.addr(0x6);
     address public eventOwner = vm.addr(0x10);
 
+    // Constants
     uint256 public constant INITIAL_BALANCE = 100 ether;
     uint16 public constant MIMUM_TICKETS = 2;
     uint256 public constant TICKET_PRICE = 100;
 
+    // This function is called before each test function like beforeEach in mocha
     function setUp() public {
         vm.deal(alice, INITIAL_BALANCE);
         vm.deal(bob, INITIAL_BALANCE);
